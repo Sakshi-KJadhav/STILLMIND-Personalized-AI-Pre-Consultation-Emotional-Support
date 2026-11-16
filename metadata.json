@@ -1,0 +1,6 @@
+{
+  "name": "StillMind",
+  "description": "AI-Powered Mental Health Support & Pre-Consultation Platform",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
