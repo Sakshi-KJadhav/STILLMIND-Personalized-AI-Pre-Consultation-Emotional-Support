@@ -1,13 +1,13 @@
-/* StillMind — AI-Powered Mental Health Support & Pre-Consultation Platform */
+/* StillMind — Frontend Client Connected to Python Backend */
 (() => {
   'use strict';
 
   // =========================================================================
-  // Constants & Storage Keys
+  // Constants & Session Keys
   // =========================================================================
   const STORAGE_KEYS = {
-    USERS: 'stillmind_users_v1',
-    ACTIVE_SESSION: 'stillmind_active_session_v1',
+    TOKEN: 'stillmind_session_token_v2',
+    GUEST_ID: 'stillmind_guest_id_v2',
     MODEL: 'stillmind_gemini_model',
   };
 
@@ -57,122 +57,18 @@
     /\bjeev\s+dyava\b/i,
   ];
 
-  const MAHARASHTRA_CONSULTANTS = [
-    {
-      id: 'c-pune-1',
-      name: 'Dr. Aditi Kulkarni',
-      initials: 'AK',
-      credentials: 'M.Phil Clinical Psychology · RCI Registered',
-      city: 'Pune',
-      area: 'Shivajinagar, Pune',
-      experience: '10 yrs experience',
-      languages: 'Marathi, Hindi, English',
-      specializations: 'Anxiety · Academic Burnout · CBT & Mindfulness',
-      availability: 'Available Now',
-      availableNow: true,
-    },
-    {
-      id: 'c-pune-2',
-      name: 'Rohan Deshmukh',
-      initials: 'RD',
-      credentials: 'M.A. Counseling Psychology',
-      city: 'Pune',
-      area: 'Kothrud, Pune',
-      experience: '7 yrs experience',
-      languages: 'Marathi, English',
-      specializations: 'Career Transitions · Sleep Hygiene · Stress Management',
-      availability: 'Next Slot: Today, 5:00 PM',
-      availableNow: false,
-    },
-    {
-      id: 'c-mumbai-1',
-      name: 'Dr. Meera Nair',
-      initials: 'MN',
-      credentials: 'Ph.D. Counseling Psychology · RCI Registered',
-      city: 'Mumbai',
-      area: 'Bandra West, Mumbai',
-      experience: '12 yrs experience',
-      languages: 'English, Hindi, Marathi',
-      specializations: 'Relationship Dynamics · Panic & Overwhelm · Trauma-Informed Care',
-      availability: 'Available Now',
-      availableNow: true,
-    },
-    {
-      id: 'c-mumbai-2',
-      name: 'Siddharth Joshi',
-      initials: 'SJ',
-      credentials: 'M.Sc. Clinical Psychology',
-      city: 'Mumbai',
-      area: 'Powai, Mumbai',
-      experience: '6 yrs experience',
-      languages: 'Hindi, English, Marathi',
-      specializations: 'Workplace Stress · Young Adult Counseling · ACT',
-      availability: 'Next Slot: Today, 6:30 PM',
-      availableNow: false,
-    },
-    {
-      id: 'c-nagpur-1',
-      name: 'Dr. Pallavi Deshpande',
-      initials: 'PD',
-      credentials: 'M.Phil Clinical Psychology · RCI Registered',
-      city: 'Nagpur',
-      area: 'Dharampeth, Nagpur',
-      experience: '9 yrs experience',
-      languages: 'Marathi, Hindi, English',
-      specializations: 'Exam Anxiety · Emotional Regulation · Family Support',
-      availability: 'Available Now',
-      availableNow: true,
-    },
-    {
-      id: 'c-nagpur-2',
-      name: 'Aniket Wankhede',
-      initials: 'AW',
-      credentials: 'M.A. Applied Psychology',
-      city: 'Nagpur',
-      area: 'Civil Lines, Nagpur',
-      experience: '5 yrs experience',
-      languages: 'Marathi, Hindi',
-      specializations: 'General Stress · Sleep Difficulties · Behavioral Activation',
-      availability: 'Next Slot: Tomorrow, 11:00 AM',
-      availableNow: false,
-    },
-    {
-      id: 'c-nashik-1',
-      name: 'Snehal Patil',
-      initials: 'SP',
-      credentials: 'M.A. Counseling Psychology',
-      city: 'Nashik',
-      area: 'College Road, Nashik',
-      experience: '8 yrs experience',
-      languages: 'Marathi, Hindi, English',
-      specializations: 'Student Wellbeing · Self-Esteem · Solution-Focused Therapy',
-      availability: 'Available Now',
-      availableNow: true,
-    },
-    {
-      id: 'c-nashik-2',
-      name: 'Dr. Vikram Gokhale',
-      initials: 'VG',
-      credentials: 'M.D. Psychiatry · Tele-Consultation',
-      city: 'Nashik',
-      area: 'Gangapur Road, Nashik',
-      experience: '14 yrs experience',
-      languages: 'Marathi, Hindi, English',
-      specializations: 'Severe Distress · Mood & Sleep Assessment · Clinical Handoff',
-      availability: 'Next Slot: Today, 7:15 PM',
-      availableNow: false,
-    },
-  ];
-
   // =========================================================================
   // Application State
   // =========================================================================
   const state = {
-    session: null, // { id, email, isGuest }
+    token: '',
+    user: null, // { id, email, isGuest, preferredModel }
     model: DEFAULT_MODEL,
     chats: [],
     activeChatId: null,
     stressLogs: [],
+    stressAverage: null,
+    consultants: [],
     activeTab: 'chat',
     isSending: false,
     currentIntakeDraft: {
@@ -182,10 +78,9 @@
       style: 'Empathetic Listener',
     },
     noteData: null,
-    // Relief Games state
     breathing: {
       running: false,
-      phaseIndex: 0, // 0: Inhale 4s, 1: Hold 7s, 2: Exhale 8s
+      phaseIndex: 0,
       secondsLeft: 4,
       cycles: 0,
       intervalId: null,
@@ -199,9 +94,9 @@
       rafId: null,
       initialized: false,
     },
-    // Video modal state
     video: {
       consultant: null,
+      appointmentId: null,
       micOn: true,
       camOn: false,
       connected: false,
@@ -329,20 +224,8 @@
   };
 
   // =========================================================================
-  // Utility Helpers
+  // Utility & API Helpers
   // =========================================================================
-  function generateId(prefix = 'id') {
-    return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
-  }
-
-  function simpleHash(str) {
-    let hash = 5381;
-    for (let i = 0; i < str.length; i += 1) {
-      hash = (hash * 33) ^ str.charCodeAt(i);
-    }
-    return (hash >>> 0).toString(16);
-  }
-
   function safeJsonParse(raw, fallback) {
     try {
       return raw ? JSON.parse(raw) : fallback;
@@ -379,11 +262,39 @@
     }, 3200);
   }
 
+  async function apiFetch(path, options = {}) {
+    const headers = { ...(options.headers || {}) };
+    if (state.token) {
+      headers.Authorization = `Bearer ${state.token}`;
+    }
+    if (options.body && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    const res = await fetch(path, {
+      ...options,
+      headers,
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (res.status === 401 && !path.startsWith('/api/auth/login')) {
+        clearClientSession();
+        openAuthModal(false);
+      }
+      const err = new Error(data.error || `Request failed (${res.status})`);
+      err.status = res.status;
+      err.code = data.code || 'API_ERROR';
+      throw err;
+    }
+    return data;
+  }
+
   function renderFormattedMarkdown(rawText) {
     const escaped = escapeHtml(rawText || '');
     const lines = escaped.split(/\r?\n/);
     const htmlParts = [];
-    let inList = null; // 'ul' | 'ol'
+    let inList = null;
 
     const applyInline = (line) =>
       line
@@ -429,66 +340,28 @@
   }
 
   // =========================================================================
-  // LocalStorage Data Layer (User-Scoped)
+  // Session & Account Modal Logic (Python Backend)
   // =========================================================================
-  function getUserChatsKey(userId) {
-    return `stillmind_chats_${userId}`;
-  }
-
-  function getUserStressKey(userId) {
-    return `stillmind_stress_${userId}`;
-  }
-
-  function loadGlobalSettings() {
-    const savedModel = localStorage.getItem(STORAGE_KEYS.MODEL);
-    state.model =
-      savedModel === 'gemini-4-hydrogen' || savedModel === 'gemini-3.1-flash-lite'
-        ? savedModel
-        : DEFAULT_MODEL;
-    els.geminiModelSelect.value = state.model;
-    updateModelIndicators();
-  }
-
   function updateModelIndicators() {
     if (els.modelStatusLabel) {
       els.modelStatusLabel.textContent = `Model: ${state.model}`;
     }
-  }
-
-  function loadUserWorkspaceData() {
-    if (!state.session) return;
-    const userId = state.session.id;
-    state.chats = safeJsonParse(localStorage.getItem(getUserChatsKey(userId)), []);
-    state.stressLogs = safeJsonParse(localStorage.getItem(getUserStressKey(userId)), []);
-
-    if (state.chats.length > 0) {
-      state.activeChatId = state.chats[0].id;
-    } else {
-      state.activeChatId = null;
+    if (els.geminiModelSelect) {
+      els.geminiModelSelect.value = state.model;
     }
-
-    els.userIdentityLabel.textContent = state.session.isGuest
-      ? `Anonymous Guest (${state.session.id.slice(-4).toUpperCase()})`
-      : state.session.email;
-
-    renderChatHistory();
-    renderStressHistory();
-    renderActiveChatPanel();
   }
 
-  function persistChats() {
-    if (!state.session) return;
-    localStorage.setItem(getUserChatsKey(state.session.id), JSON.stringify(state.chats));
+  function clearClientSession() {
+    localStorage.removeItem(STORAGE_KEYS.TOKEN);
+    state.token = '';
+    state.user = null;
+    state.chats = [];
+    state.activeChatId = null;
+    state.stressLogs = [];
+    state.stressAverage = null;
+    state.noteData = null;
   }
 
-  function persistStressLogs() {
-    if (!state.session) return;
-    localStorage.setItem(getUserStressKey(state.session.id), JSON.stringify(state.stressLogs));
-  }
-
-  // =========================================================================
-  // Account & Session Modal Logic
-  // =========================================================================
   function openAuthModal(allowClose = true) {
     els.authError.textContent = '';
     els.geminiModelSelect.value = state.model;
@@ -497,18 +370,57 @@
   }
 
   function closeAuthModal() {
-    if (!state.session) return;
+    if (!state.user) return;
     els.authModal.classList.add('hidden');
   }
 
-  function completeSignIn(sessionObj) {
-    state.session = sessionObj;
-    localStorage.setItem(STORAGE_KEYS.ACTIVE_SESSION, JSON.stringify(sessionObj));
-    els.authModal.classList.add('hidden');
-    loadUserWorkspaceData();
+  async function hydrateWorkspaceFromBackend() {
+    if (!state.user) return;
+
+    els.userIdentityLabel.textContent = state.user.isGuest
+      ? `Anonymous Guest (${state.user.id.slice(-4).toUpperCase()})`
+      : state.user.email;
+
+    if (state.user.preferredModel) {
+      state.model = state.user.preferredModel;
+      localStorage.setItem(STORAGE_KEYS.MODEL, state.model);
+    }
+    updateModelIndicators();
+
+    try {
+      const [chatsData, stressData, consultantsData] = await Promise.all([
+        apiFetch('/api/chats'),
+        apiFetch('/api/stress'),
+        loadConsultantsFromServer(),
+      ]);
+
+      state.chats = chatsData.chats || [];
+      state.activeChatId = state.chats.length > 0 ? state.chats[0].id : null;
+      state.stressLogs = stressData.logs || [];
+      state.stressAverage = stressData.average ?? null;
+      if (consultantsData) {
+        state.consultants = consultantsData;
+      }
+
+      if (state.activeChatId) {
+        const noteRes = await apiFetch(
+          `/api/notes/latest?chatId=${encodeURIComponent(state.activeChatId)}`
+        ).catch(() => ({ note: null }));
+        state.noteData = noteRes.note || null;
+      } else {
+        state.noteData = null;
+      }
+
+      renderChatHistory();
+      renderStressHistory();
+      renderActiveChatPanel();
+      renderClinicalNote();
+    } catch (err) {
+      showToast(err.message || 'Unable to load workspace from Python server', true);
+    }
   }
 
-  function handlePseudonymousLogin(e) {
+  async function handlePseudonymousLogin(e) {
     e.preventDefault();
     els.authError.textContent = '';
 
@@ -524,45 +436,61 @@
       return;
     }
 
-    const users = safeJsonParse(localStorage.getItem(STORAGE_KEYS.USERS), {});
-    const passHash = simpleHash(password);
-
-    if (users[email]) {
-      if (users[email].passHash !== passHash) {
-        els.authError.textContent = 'Incorrect password for this local account.';
-        return;
-      }
-      completeSignIn({ id: users[email].id, email, isGuest: false });
-      showToast('Signed in to private local account');
-    } else {
-      const userId = `u_${simpleHash(email)}`;
-      users[email] = { id: userId, email, passHash, createdAt: new Date().toISOString() };
-      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
-      completeSignIn({ id: userId, email, isGuest: false });
-      showToast('Created private local account');
+    try {
+      const res = await apiFetch('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password, model: state.model }),
+      });
+      state.token = res.token;
+      state.user = res.user;
+      localStorage.setItem(STORAGE_KEYS.TOKEN, res.token);
+      els.authModal.classList.add('hidden');
+      els.authPassword.value = '';
+      showToast(res.created ? 'Created private account on server' : 'Signed in to private account');
+      await hydrateWorkspaceFromBackend();
+    } catch (err) {
+      els.authError.textContent = err.message || 'Unable to sign in.';
     }
   }
 
-  function handleGuestLogin() {
-    const existingGuestId = localStorage.getItem('stillmind_guest_id') || generateId('guest');
-    localStorage.setItem('stillmind_guest_id', existingGuestId);
-    completeSignIn({ id: existingGuestId, email: 'Anonymous Guest', isGuest: true });
-    showToast('Entered as Anonymous Guest');
+  async function handleGuestLogin() {
+    els.authError.textContent = '';
+    const existingGuestId = localStorage.getItem(STORAGE_KEYS.GUEST_ID) || '';
+    try {
+      const res = await apiFetch('/api/auth/guest', {
+        method: 'POST',
+        body: JSON.stringify({ guestId: existingGuestId, model: state.model }),
+      });
+      state.token = res.token;
+      state.user = res.user;
+      localStorage.setItem(STORAGE_KEYS.TOKEN, res.token);
+      localStorage.setItem(STORAGE_KEYS.GUEST_ID, res.user.id);
+      els.authModal.classList.add('hidden');
+      showToast('Entered as Anonymous Guest');
+      await hydrateWorkspaceFromBackend();
+    } catch (err) {
+      els.authError.textContent = err.message || 'Unable to start guest session.';
+    }
   }
 
-  function handleSignOut() {
-    localStorage.removeItem(STORAGE_KEYS.ACTIVE_SESSION);
-    state.session = null;
-    state.chats = [];
-    state.activeChatId = null;
-    state.stressLogs = [];
-    state.noteData = null;
-    els.authPassword.value = '';
-    openAuthModal(false);
+  async function handleSignOut() {
+    try {
+      if (state.token) {
+        await apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+      }
+    } finally {
+      clearClientSession();
+      els.authPassword.value = '';
+      renderChatHistory();
+      renderStressHistory();
+      renderActiveChatPanel();
+      renderClinicalNote();
+      openAuthModal(false);
+    }
   }
 
   // =========================================================================
-  // Pre-Screening Intake & Chat Session Management
+  // Pre-Screening Intake & Chat Management (Python SQLite Backend)
   // =========================================================================
   function getActiveChat() {
     return state.chats.find((c) => c.id === state.activeChatId) || null;
@@ -574,28 +502,8 @@
     switchTab('chat');
     renderChatHistory();
     renderActiveChatPanel();
+    renderClinicalNote();
     closeMobileSidebar();
-  }
-
-  function getLocalizedWelcomeMessage(intake) {
-    const { mood, concern, language, style } = intake;
-    const isPractical = style === 'Practical Coping Exercises';
-
-    if (language === 'Hindi') {
-      return isPractical
-        ? `नमस्ते। StillMind में आपका स्वागत है। आपने बताया कि आप अभी **${mood}** महसूस कर रहे हैं और **${concern}** को लेकर चिंतित हैं।\n\nहम छोटे, व्यावहारिक कदमों से शुरुआत कर सकते हैं। क्या आप बताना चाहेंगे कि इस समय सबसे ज़्यादा दबाव किस बात से महसूस हो रहा है?`
-        : `नमस्ते। मैं आपकी बात बिना किसी जजमेंट के सुनने के लिए यहाँ हूँ। **${concern}** के कारण **${mood}** महसूस करना पूरी तरह स्वाभाविक है।\n\nजब भी आप सहज हों, जो मन में चल रहा है वह साझा करें।`;
-    }
-
-    if (language === 'Marathi') {
-      return isPractical
-        ? `नमस्कार. StillMind मध्ये तुमचे स्वागत आहे. तुम्ही सध्या **${mood}** वाटत असल्याचे आणि **${concern}** बद्दल विचार करत असल्याचे नमूद केले आहे.\n\nआपण सोप्या आणि व्यावहारिक उपायांपासून सुरुवात करू शकतो. सध्या नेमका कशाचा जास्त ताण येत आहे ते सांगाल का?`
-        : `नमस्कार. मी तुमचे म्हणणे शांतपणे आणि कोणताही न्याय न करता ऐकण्यासाठी येथे आहे. **${concern}** मुळे **${mood}** वाटणे समजण्यासारखे आहे.\n\nतुम्हाला जे वाटते आहे ते मोकळेपणाने शेअर करा.`;
-    }
-
-    return isPractical
-      ? `Welcome to StillMind. Thank you for sharing that you're feeling **${mood.toLowerCase()}** around **${concern.toLowerCase()}**.\n\nSince you prefer practical coping exercises, we can break things down into manageable steps together. What feels like the heaviest part right now?`
-      : `Welcome to StillMind. I'm glad you're taking a quiet moment for yourself. Feeling **${mood.toLowerCase()}** when navigating **${concern.toLowerCase()}** is completely understandable.\n\nTake your time—what's been weighing on your mind today?`;
   }
 
   function getStarterPrompts(intake) {
@@ -631,63 +539,74 @@
     });
   }
 
-  function handleIntakeSubmit(e) {
+  async function handleIntakeSubmit(e) {
     e.preventDefault();
     const intake = { ...state.currentIntakeDraft };
     const existing = getActiveChat();
 
-    if (existing) {
-      existing.intake = intake;
-      existing.updatedAt = new Date().toISOString();
-      persistChats();
+    try {
+      if (existing) {
+        const res = await apiFetch(`/api/chats/${encodeURIComponent(existing.id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify(intake),
+        });
+        const idx = state.chats.findIndex((c) => c.id === existing.id);
+        if (idx !== -1) state.chats[idx] = res.chat;
+        renderChatHistory();
+        renderActiveChatPanel();
+        showToast('Check-in preferences updated');
+        return;
+      }
+
+      const res = await apiFetch('/api/chats', {
+        method: 'POST',
+        body: JSON.stringify(intake),
+      });
+      state.chats.unshift(res.chat);
+      state.activeChatId = res.chat.id;
+      state.noteData = null;
       renderChatHistory();
       renderActiveChatPanel();
-      showToast('Check-in preferences updated');
-      return;
+      renderClinicalNote();
+    } catch (err) {
+      showToast(err.message || 'Could not save check-in', true);
     }
-
-    const newChat = {
-      id: generateId('chat'),
-      title: `${intake.concern} Check-In`,
-      intake,
-      crisisLocked: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      messages: [
-        {
-          id: generateId('msg'),
-          role: 'assistant',
-          text: getLocalizedWelcomeMessage(intake),
-          timestamp: new Date().toISOString(),
-        },
-      ],
-    };
-
-    state.chats.unshift(newChat);
-    state.activeChatId = newChat.id;
-    persistChats();
-    renderChatHistory();
-    renderActiveChatPanel();
   }
 
-  function selectChat(chatId) {
+  async function selectChat(chatId) {
     state.activeChatId = chatId;
-    state.noteData = null;
     switchTab('chat');
     renderChatHistory();
     renderActiveChatPanel();
     closeMobileSidebar();
+
+    try {
+      const noteRes = await apiFetch(
+        `/api/notes/latest?chatId=${encodeURIComponent(chatId)}`
+      );
+      state.noteData = noteRes.note || null;
+      renderClinicalNote();
+    } catch {
+      state.noteData = null;
+      renderClinicalNote();
+    }
   }
 
-  function deleteChat(chatId) {
-    state.chats = state.chats.filter((c) => c.id !== chatId);
-    if (state.activeChatId === chatId) {
-      state.activeChatId = state.chats.length > 0 ? state.chats[0].id : null;
+  async function deleteChat(chatId) {
+    try {
+      await apiFetch(`/api/chats/${encodeURIComponent(chatId)}`, { method: 'DELETE' });
+      state.chats = state.chats.filter((c) => c.id !== chatId);
+      if (state.activeChatId === chatId) {
+        state.activeChatId = state.chats.length > 0 ? state.chats[0].id : null;
+        state.noteData = null;
+      }
+      renderChatHistory();
+      renderActiveChatPanel();
+      renderClinicalNote();
+      showToast('Conversation deleted');
+    } catch (err) {
+      showToast(err.message || 'Could not delete conversation', true);
     }
-    persistChats();
-    renderChatHistory();
-    renderActiveChatPanel();
-    showToast('Conversation deleted');
   }
 
   function renderChatHistory() {
@@ -755,7 +674,6 @@
     const { mood, concern, language, style } = chat.intake;
     els.chatIntakeSummary.textContent = `Mood: ${mood} · Concern: ${concern} · Language: ${language} · Style: ${style}`;
 
-    // Crisis lock UI
     const isLocked = Boolean(chat.crisisLocked);
     els.crisisBanner.classList.toggle('hidden', !isLocked);
     els.chatInput.disabled = isLocked;
@@ -831,122 +749,11 @@
   }
 
   // =========================================================================
-  // Crisis Guardrail & Gemini REST API Integration
+  // Crisis Guardrail & Python Streaming Chat Integration
   // =========================================================================
   function detectCrisisKeywords(text) {
     if (!text) return false;
     return CRISIS_PATTERNS.some((pattern) => pattern.test(text));
-  }
-
-  function buildSystemInstruction(chat) {
-    const { mood, concern, language, style } = chat.intake;
-    const latestStress = state.stressLogs.length > 0 ? state.stressLogs[0].score : null;
-    const stressLine = latestStress !== null ? `Latest logged stress level: ${latestStress}/10.` : 'No stress check-in logged yet.';
-
-    return [
-      'You are StillMind, a calm, culturally sensitive mental health support and pre-consultation companion.',
-      'Your role is supportive reflection and preparation for human counseling—never diagnose medical conditions or prescribe medication.',
-      `User Check-In Profile:`,
-      `- Current Mood: ${mood}`,
-      `- Primary Concern: ${concern}`,
-      `- Preferred Language: ${language} (You MUST reply naturally and warmly in ${language}. If Hindi, use clear Hindi Devanagari or gentle conversational Hindi; if Marathi, use natural Marathi Devanagari.)`,
-      `- Support Style: ${style}`,
-      `- ${stressLine}`,
-      style === 'Practical Coping Exercises'
-        ? 'Prioritize grounded, step-by-step coping techniques (such as box breathing, cognitive reframing, or 5-4-3-2-1 sensory grounding) tailored to their concern.'
-        : 'Prioritize empathetic validation, reflective listening, gentle open-ended questions, and emotional warmth.',
-      'Keep responses concise (2–4 short paragraphs or bullet points), clear, and soothing.',
-    ].join('\n');
-  }
-
-  async function callGeminiChatStream({ systemInstruction, contents, onChunk }) {
-    const response = await fetch('/api/gemini/chat/stream', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction,
-        contents,
-        model: state.model,
-      }),
-    });
-
-    if (!response.ok) {
-      const errPayload = await response.json().catch(() => ({}));
-      const err = new Error(errPayload.error || `Server error (HTTP ${response.status})`);
-      err.code = errPayload.code || 'UPSTREAM_ERROR';
-      throw err;
-    }
-
-    if (!response.body) {
-      const fallbackRes = await fetch('/api/gemini/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ systemInstruction, contents, model: state.model }),
-      });
-      const fallbackData = await fallbackRes.json().catch(() => ({}));
-      if (!fallbackRes.ok) {
-        throw new Error(fallbackData.error || `Server error (HTTP ${fallbackRes.status})`);
-      }
-      onChunk(fallbackData.text || '');
-      return fallbackData.text || '';
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let fullText = '';
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      const events = buffer.split('\n\n');
-      buffer = events.pop() || '';
-
-      for (const evt of events) {
-        const line = evt
-          .split('\n')
-          .find((l) => l.startsWith('data: '));
-        if (!line) continue;
-        const payload = safeJsonParse(line.slice(6), null);
-        if (!payload) continue;
-        if (payload.error) {
-          const err = new Error(payload.error);
-          err.code = payload.code || 'UPSTREAM_ERROR';
-          throw err;
-        }
-        if (payload.chunk) {
-          fullText += payload.chunk;
-          onChunk(fullText);
-        }
-      }
-    }
-
-    if (!fullText.trim()) {
-      throw new Error('Empty response from StillMind AI.');
-    }
-    return fullText;
-  }
-
-  async function callGeminiNote({ systemInstruction, prompt }) {
-    const response = await fetch('/api/gemini/note', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction,
-        prompt,
-        model: state.model,
-      }),
-    });
-
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const err = new Error(payload.error || `Server error (HTTP ${response.status})`);
-      err.code = payload.code || 'UPSTREAM_ERROR';
-      throw err;
-    }
-    return payload.text || '';
   }
 
   async function submitChatMessage(rawText) {
@@ -956,14 +763,15 @@
     const text = rawText.trim();
     if (!text) return;
 
-    // 1. Add user message & auto-title if first user message
-    const hadUserMsgs = chat.messages.some((m) => m.role === 'user');
-    chat.messages.push({
-      id: generateId('msg'),
+    const isImmediateCrisis = detectCrisisKeywords(text);
+    const tempUserMsg = {
+      id: `temp_${Date.now()}`,
       role: 'user',
       text,
       timestamp: new Date().toISOString(),
-    });
+    };
+    const hadUserMsgs = chat.messages.some((m) => m.role === 'user');
+    chat.messages.push(tempUserMsg);
     if (!hadUserMsgs) {
       chat.title = text.length > 38 ? `${text.slice(0, 38).trim()}...` : text;
     }
@@ -972,87 +780,137 @@
     els.chatInput.value = '';
     els.chatInput.style.height = 'auto';
 
-    // 2. Crisis Detection Check BEFORE server Gemini API Call
-    if (detectCrisisKeywords(text)) {
-      chat.crisisLocked = true;
-      chat.messages.push({
-        id: generateId('msg'),
-        role: 'assistant',
-        text: 'I hear how much pain you are carrying right now. Because your safety matters most, I have paused AI chat so you can connect directly with trained crisis support (**Tele-MANAS: 14416 / 1800-891-4416** or **Vandrevala Foundation: +91 9999 666 555**) or a Maharashtra counselor.',
-        timestamp: new Date().toISOString(),
-      });
-      persistChats();
-      renderChatHistory();
-      renderActiveChatPanel();
-      return;
-    }
-
-    // 3. Stream reply from Server Gemini API
-    state.isSending = true;
-    const contents = chat.messages
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .map((m) => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        parts: [{ text: m.text }],
-      }));
-
-    let streamingMsg = null;
-    persistChats();
+    state.isSending = !isImmediateCrisis;
     renderChatHistory();
     renderActiveChatPanel();
 
+    let streamingMsg = null;
+
     try {
-      await callGeminiChatStream({
-        systemInstruction: buildSystemInstruction(chat),
-        contents,
-        onChunk: (partialText) => {
-          if (!streamingMsg) {
-            streamingMsg = {
-              id: generateId('msg'),
-              role: 'assistant',
-              text: partialText,
-              timestamp: new Date().toISOString(),
-            };
-            chat.messages.push(streamingMsg);
-            state.isSending = false;
-          } else {
-            streamingMsg.text = partialText;
-          }
-          chat.updatedAt = new Date().toISOString();
-          renderMessages(chat);
-        },
-      });
-    } catch (error) {
-      if (streamingMsg && !streamingMsg.text.trim()) {
-        chat.messages = chat.messages.filter((m) => m.id !== streamingMsg.id);
+      const response = await fetch(
+        `/api/chats/${encodeURIComponent(chat.id)}/messages/stream`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(state.token ? { Authorization: `Bearer ${state.token}` } : {}),
+          },
+          body: JSON.stringify({ text, model: state.model }),
+        }
+      );
+
+      if (!response.ok || !response.body) {
+        const errPayload = await response.json().catch(() => ({}));
+        throw new Error(errPayload.error || `Server error (HTTP ${response.status})`);
       }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let accumulated = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const events = buffer.split('\n\n');
+        buffer = events.pop() || '';
+
+        for (const evt of events) {
+          const line = evt.split('\n').find((l) => l.startsWith('data: '));
+          if (!line) continue;
+          const payload = safeJsonParse(line.slice(6), null);
+          if (!payload) continue;
+
+          if (payload.meta) {
+            if (payload.chatTitle) chat.title = payload.chatTitle;
+            if (payload.userMessage) {
+              const idx = chat.messages.findIndex((m) => m.id === tempUserMsg.id);
+              if (idx !== -1) chat.messages[idx] = payload.userMessage;
+            }
+          }
+
+          if (payload.crisisLocked) {
+            chat.crisisLocked = true;
+            if (payload.chatTitle) chat.title = payload.chatTitle;
+            if (payload.userMessage) {
+              const idx = chat.messages.findIndex((m) => m.id === tempUserMsg.id);
+              if (idx !== -1) chat.messages[idx] = payload.userMessage;
+            }
+            if (payload.assistantMessage) {
+              chat.messages.push(payload.assistantMessage);
+            }
+            state.isSending = false;
+            renderChatHistory();
+            renderActiveChatPanel();
+            return;
+          }
+
+          if (payload.error) {
+            if (streamingMsg && !streamingMsg.text.trim()) {
+              chat.messages = chat.messages.filter((m) => m.id !== streamingMsg.id);
+            }
+            chat.messages.push({
+              id: payload.errorId || `err_${Date.now()}`,
+              role: 'system-error',
+              text: payload.error,
+              timestamp: payload.timestamp || new Date().toISOString(),
+            });
+            state.isSending = false;
+            renderActiveChatPanel();
+            return;
+          }
+
+          if (payload.chunk) {
+            accumulated += payload.chunk;
+            if (!streamingMsg) {
+              streamingMsg = {
+                id: `stream_${Date.now()}`,
+                role: 'assistant',
+                text: accumulated,
+                timestamp: new Date().toISOString(),
+              };
+              chat.messages.push(streamingMsg);
+              state.isSending = false;
+            } else {
+              streamingMsg.text = accumulated;
+            }
+            renderMessages(chat);
+          }
+
+          if (payload.done && payload.assistantMessage) {
+            if (streamingMsg) {
+              const idx = chat.messages.findIndex((m) => m.id === streamingMsg.id);
+              if (idx !== -1) chat.messages[idx] = payload.assistantMessage;
+            } else {
+              chat.messages.push(payload.assistantMessage);
+            }
+            chat.updatedAt = payload.assistantMessage.timestamp;
+          }
+        }
+      }
+    } catch (err) {
       chat.messages.push({
-        id: generateId('msg'),
+        id: `err_${Date.now()}`,
         role: 'system-error',
-        text: error.message || 'Unable to generate a response right now. Please try again shortly.',
+        text: err.message || 'Unable to generate a response right now. Please try again shortly.',
         timestamp: new Date().toISOString(),
       });
     } finally {
       state.isSending = false;
-      persistChats();
       renderChatHistory();
       renderActiveChatPanel();
     }
   }
 
   // =========================================================================
-  // Stress-Level Tracker (1-10)
+  // Stress-Level Tracker (Python SQLite Persistence)
   // =========================================================================
   function getStressDescriptor(score) {
-    if (score <= 3) {
-      return { emoji: '😌', label: 'Calm / Low Stress', color: '#2E6F65' };
-    }
-    if (score <= 6) {
-      return { emoji: '😐', label: 'Moderate Tension', color: '#B45309' };
-    }
-    if (score <= 8) {
-      return { emoji: '😟', label: 'Elevated Stress', color: '#C2410C' };
-    }
+    if (score <= 3) return { emoji: '😌', label: 'Calm / Low Stress', color: '#2E6F65' };
+    if (score <= 6) return { emoji: '😐', label: 'Moderate Tension', color: '#B45309' };
+    if (score <= 8) return { emoji: '😟', label: 'Elevated Stress', color: '#C2410C' };
     return { emoji: '😣', label: 'High Distress', color: '#B91C1C' };
   }
 
@@ -1066,19 +924,20 @@
     els.stressStateLabel.style.color = info.color;
   }
 
-  function handleLogStress() {
+  async function handleLogStress() {
     const score = Number(els.stressSlider.value);
-    state.stressLogs.unshift({
-      id: generateId('stress'),
-      score,
-      timestamp: new Date().toISOString(),
-    });
-    if (state.stressLogs.length > 30) {
-      state.stressLogs = state.stressLogs.slice(0, 30);
+    try {
+      const res = await apiFetch('/api/stress', {
+        method: 'POST',
+        body: JSON.stringify({ score }),
+      });
+      state.stressLogs = res.logs || [];
+      state.stressAverage = res.average ?? null;
+      renderStressHistory();
+      showToast(`Logged stress check-in: ${score}/10`);
+    } catch (err) {
+      showToast(err.message || 'Unable to log stress check-in', true);
     }
-    persistStressLogs();
-    renderStressHistory();
-    showToast(`Logged stress check-in: ${score}/10`);
   }
 
   function renderStressHistory() {
@@ -1094,9 +953,12 @@
     }
 
     const recent = state.stressLogs.slice(0, 8).reverse();
-    const avg = (
-      state.stressLogs.reduce((acc, item) => acc + item.score, 0) / state.stressLogs.length
-    ).toFixed(1);
+    const avg =
+      state.stressAverage !== null
+        ? Number(state.stressAverage).toFixed(1)
+        : (
+            state.stressLogs.reduce((acc, item) => acc + item.score, 0) / state.stressLogs.length
+          ).toFixed(1);
     els.stressAvgLabel.textContent = `Avg ${avg}/10`;
 
     recent.forEach((entry) => {
@@ -1266,7 +1128,9 @@
     const palette = BUBBLE_COLORS[Math.floor(Math.random() * BUBBLE_COLORS.length)];
     return {
       x: r + Math.random() * Math.max(40, width - r * 2),
-      y: startAtBottom ? height + r + Math.random() * 30 : r + Math.random() * Math.max(40, height - r * 2),
+      y: startAtBottom
+        ? height + r + Math.random() * 30
+        : r + Math.random() * Math.max(40, height - r * 2),
       r,
       vy: -(0.35 + Math.random() * 0.45),
       vx: (Math.random() - 0.5) * 0.25,
@@ -1317,7 +1181,6 @@
 
     ctx.clearRect(0, 0, width, height);
 
-    // Update & draw bubbles
     state.bubbles.items.forEach((b, idx) => {
       b.wobblePhase += 0.025;
       b.y += b.vy;
@@ -1337,14 +1200,12 @@
       ctx.strokeStyle = b.color.stroke;
       ctx.stroke();
 
-      // Soft highlight arc
       ctx.beginPath();
       ctx.arc(b.x - b.r * 0.3, b.y - b.r * 0.3, b.r * 0.22, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
       ctx.fill();
     });
 
-    // Update & draw ripples
     for (let i = state.bubbles.ripples.length - 1; i >= 0; i -= 1) {
       const rp = state.bubbles.ripples[i];
       rp.radius += 1.6;
@@ -1384,137 +1245,31 @@
   }
 
   // =========================================================================
-  // Pre-Consultation Note Generator (Gemini + Offline Fallback)
+  // Pre-Consultation Note Generator (Python Backend)
   // =========================================================================
-  function buildFallbackClinicalNote(chat) {
-    const intake = chat ? chat.intake : state.currentIntakeDraft;
-    const latestStress = state.stressLogs.length > 0 ? state.stressLogs[0].score : null;
-    const avgStress =
-      state.stressLogs.length > 0
-        ? (
-            state.stressLogs.reduce((sum, s) => sum + s.score, 0) / state.stressLogs.length
-          ).toFixed(1)
-        : null;
-
-    const userMessages = chat
-      ? chat.messages.filter((m) => m.role === 'user').map((m) => m.text)
-      : [];
-
-    const chiefConcernText =
-      userMessages.length > 0
-        ? `Primary area reported as ${intake.concern}. User shared: "${userMessages[0].slice(
-            0,
-            180
-          )}${userMessages[0].length > 180 ? '...' : ''}"`
-        : `Primary area selected during pre-screening: ${intake.concern}. No detailed conversation messages recorded yet.`;
-
-    const emotionalStateText = chat?.crisisLocked
-      ? `${intake.mood} with flagged high-distress / crisis phrasing during session. Immediate safety helpline resources were presented.`
-      : `Self-reported current mood is ${intake.mood} (preferred communication in ${intake.language}).`;
-
-    const stressScoreText =
-      latestStress !== null
-        ? `Latest check-in: ${latestStress}/10 (${getStressDescriptor(latestStress).label}). Session average across ${state.stressLogs.length} log(s): ${avgStress}/10.`
-        : 'No numeric stress check-ins logged yet (recommend collecting baseline 1–10 rating at session start).';
-
-    const triggersList = [];
-    const combinedText = userMessages.join(' ').toLowerCase();
-    if (/exam|study|college|grade|academic|assignment/.test(combinedText) || intake.concern === 'Academics') {
-      triggersList.push('Academic workload, deadlines, or performance expectations');
-    }
-    if (/job|work|boss|career|interview|office/.test(combinedText) || intake.concern === 'Career') {
-      triggersList.push('Career direction or workplace pressure');
-    }
-    if (/family|partner|friend|relationship|alone|fight/.test(combinedText) || intake.concern === 'Relationships') {
-      triggersList.push('Interpersonal communication or relationship strain');
-    }
-    if (/sleep|insomnia|tired|night|wake/.test(combinedText) || intake.concern === 'Sleep') {
-      triggersList.push('Disrupted sleep schedule or nighttime restlessness');
-    }
-    if (triggersList.length === 0) {
-      triggersList.push(`Ongoing ${intake.concern.toLowerCase()} pressures impacting daily calm`);
-    }
-
-    const focusAreas = [
-      intake.style === 'Practical Coping Exercises'
-        ? 'Introduce structured grounding and actionable coping routines'
-        : 'Provide supportive reflective listening and emotional validation',
-      `Explore coping strategies tailored to ${intake.concern.toLowerCase()}`,
-      `Conduct consultation in ${intake.language} to support comfort and clarity`,
-    ];
-
-    if (chat?.crisisLocked || (latestStress !== null && latestStress >= 8)) {
-      focusAreas.unshift('Prioritize immediate safety assessment and stabilization plan');
-    }
-
-    return {
-      source: 'Offline Structured Summary (Local Fallback)',
-      generatedAt: new Date().toISOString(),
-      intake,
-      chiefConcerns: chiefConcernText,
-      emotionalState: emotionalStateText,
-      stressScore: stressScoreText,
-      keyTriggers: triggersList,
-      suggestedFocusAreas: focusAreas,
-    };
-  }
-
   async function handleGenerateNote() {
     switchTab('note');
-    const chat = getActiveChat();
-
     els.noteEmptyState.classList.add('hidden');
     els.noteOutputContainer.classList.add('hidden');
     els.noteStatusBar.classList.add('hidden');
     els.noteLoadingState.classList.remove('hidden');
 
-    let noteResult = null;
-
-    if (chat && chat.messages.some((m) => m.role === 'user')) {
-      try {
-        const latestStress = state.stressLogs.length > 0 ? `${state.stressLogs[0].score}/10` : 'Not logged';
-        const transcript = chat.messages
-          .filter((m) => m.role === 'user' || m.role === 'assistant')
-          .map((m) => `${m.role === 'user' ? 'Client' : 'Assistant'}: ${m.text}`)
-          .join('\n');
-
-        const prompt = [
-          'Generate a concise, objective Pre-Consultation Clinical Summary Note in valid JSON based on this check-in and transcript.',
-          `Profile: Mood=${chat.intake.mood}, Concern=${chat.intake.concern}, Language=${chat.intake.language}, Preferred Style=${chat.intake.style}, Latest Stress=${latestStress}, Crisis Flag=${Boolean(chat.crisisLocked)}`,
-          'Transcript:',
-          transcript,
-          'Return strictly JSON with keys: "chiefConcerns" (string), "emotionalState" (string), "stressScore" (string), "keyTriggers" (array of 2-4 concise strings), "suggestedFocusAreas" (array of 2-4 concise strings). Always write the clinical note in clear professional English.',
-        ].join('\n\n');
-
-        const rawJson = await callGeminiNote({
-          systemInstruction:
-            'You are a clinical documentation assistant creating structured, non-diagnostic pre-consultation briefs for counselors.',
-          prompt,
-        });
-
-        const parsed = JSON.parse(rawJson.replace(/^```json\s*|\s*```$/g, '').trim());
-        noteResult = {
-          source: `Gemini AI (${state.model})`,
-          generatedAt: new Date().toISOString(),
-          intake: chat.intake,
-          chiefConcerns: parsed.chiefConcerns || 'See conversation summary.',
-          emotionalState: parsed.emotionalState || chat.intake.mood,
-          stressScore: parsed.stressScore || latestStress,
-          keyTriggers: Array.isArray(parsed.keyTriggers) ? parsed.keyTriggers : [],
-          suggestedFocusAreas: Array.isArray(parsed.suggestedFocusAreas)
-            ? parsed.suggestedFocusAreas
-            : [],
-        };
-      } catch {
-        // Automatic offline/fallback generator if offline or API fails
-        noteResult = buildFallbackClinicalNote(chat);
-      }
-    } else {
-      noteResult = buildFallbackClinicalNote(chat);
+    try {
+      const res = await apiFetch('/api/notes/generate', {
+        method: 'POST',
+        body: JSON.stringify({
+          chatId: state.activeChatId,
+          model: state.model,
+          ...state.currentIntakeDraft,
+        }),
+      });
+      state.noteData = res.note;
+      renderClinicalNote();
+    } catch (err) {
+      els.noteLoadingState.classList.add('hidden');
+      els.noteEmptyState.classList.remove('hidden');
+      showToast(err.message || 'Unable to generate clinical note', true);
     }
-
-    state.noteData = noteResult;
-    renderClinicalNote();
   }
 
   function renderClinicalNote() {
@@ -1618,41 +1373,66 @@
     }
   }
 
-  function handleDownloadNote() {
+  async function handleDownloadNote() {
     if (!state.noteData) return;
-    const text = formatNoteAsPlainText(state.noteData);
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const dateStamp = new Date().toISOString().slice(0, 10);
-    a.href = url;
-    a.download = `StillMind_PreConsultation_Note_${dateStamp}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    showToast('Downloaded Pre-Consultation Note (.TXT)');
+    try {
+      const res = await fetch(
+        `/api/notes/${encodeURIComponent(state.noteData.id)}/export`,
+        {
+          headers: state.token ? { Authorization: `Bearer ${state.token}` } : {},
+        }
+      );
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `StillMind_PreConsultation_Note_${dateStamp}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showToast('Downloaded Pre-Consultation Note (.TXT)');
+    } catch {
+      const text = formatNoteAsPlainText(state.noteData);
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `StillMind_PreConsultation_Note_${dateStamp}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showToast('Downloaded Pre-Consultation Note (.TXT)');
+    }
   }
 
   // =========================================================================
-  // Maharashtra Consultant Directory & Video Preview Modal
+  // Maharashtra Consultant Directory & Video Preview Modal (Python Backend)
   // =========================================================================
+  async function loadConsultantsFromServer() {
+    const cityVal = els.cityFilter.value || 'All';
+    const availVal = els.availabilityFilter.value || 'All';
+    const params = new URLSearchParams({ city: cityVal, availability: availVal });
+    const res = await fetch(`/api/consultants?${params.toString()}`);
+    if (!res.ok) return [];
+    const data = await res.json().catch(() => ({}));
+    return data.consultants || [];
+  }
+
+  async function refreshAndRenderConsultants() {
+    state.consultants = await loadConsultantsFromServer();
+    renderConsultants();
+  }
+
   function renderConsultants() {
-    const cityVal = els.cityFilter.value;
-    const availVal = els.availabilityFilter.value;
-
-    const filtered = MAHARASHTRA_CONSULTANTS.filter((c) => {
-      const matchCity = cityVal === 'All' || c.city === cityVal;
-      const matchAvail =
-        availVal === 'All' ||
-        (availVal === 'Available Now' && c.availableNow) ||
-        (availVal === 'Today' && (c.availableNow || c.availability.includes('Today')));
-      return matchCity && matchAvail;
-    });
-
+    const list = state.consultants;
     els.consultantsGrid.innerHTML = '';
 
-    if (filtered.length === 0) {
+    if (list.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'surface-card';
       empty.innerHTML =
@@ -1661,7 +1441,7 @@
       return;
     }
 
-    filtered.forEach((c) => {
+    list.forEach((c) => {
       const card = document.createElement('article');
       card.className = 'consultant-card';
 
@@ -1731,23 +1511,60 @@
       : 'Note sharing off';
   }
 
-  function openVideoModal(consultant) {
+  async function openVideoModal(consultant) {
     stopVideoCallTimer();
     state.video.consultant = consultant;
+    state.video.appointmentId = null;
     state.video.connected = false;
     state.video.seconds = 0;
     state.video.micOn = true;
     state.video.camOn = false;
     updateVideoModalUI();
     els.videoModal.classList.remove('hidden');
+
+    if (state.token) {
+      try {
+        const res = await apiFetch('/api/appointments', {
+          method: 'POST',
+          body: JSON.stringify({
+            consultantId: consultant.id,
+            shareNote: els.shareNoteToggle.checked,
+            noteId: state.noteData ? state.noteData.id : null,
+          }),
+        });
+        state.video.appointmentId = res.appointment?.id || null;
+      } catch {
+        // Preview remains usable even if booking record fails
+      }
+    }
   }
 
-  function startVideoCall() {
+  async function startVideoCall() {
     if (state.video.connected) return;
-    if (els.shareNoteToggle.checked && !state.noteData) {
-      state.noteData = buildFallbackClinicalNote(getActiveChat());
-      renderClinicalNote();
+    if (els.shareNoteToggle.checked && !state.noteData && state.token) {
+      try {
+        const res = await apiFetch('/api/notes/generate', {
+          method: 'POST',
+          body: JSON.stringify({
+            chatId: state.activeChatId,
+            model: state.model,
+            ...state.currentIntakeDraft,
+          }),
+        });
+        state.noteData = res.note;
+        renderClinicalNote();
+      } catch {
+        // Ignore auto-note error during call preview
+      }
     }
+
+    if (state.video.appointmentId && state.token) {
+      apiFetch(`/api/appointments/${encodeURIComponent(state.video.appointmentId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'connected' }),
+      }).catch(() => {});
+    }
+
     state.video.connected = true;
     state.video.seconds = 0;
     updateVideoModalUI();
@@ -1768,6 +1585,12 @@
 
   function closeVideoModal() {
     stopVideoCallTimer();
+    if (state.video.appointmentId && state.token && state.video.connected) {
+      apiFetch(`/api/appointments/${encodeURIComponent(state.video.appointmentId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'ended' }),
+      }).catch(() => {});
+    }
     state.video.connected = false;
     els.videoModal.classList.add('hidden');
   }
@@ -1798,30 +1621,32 @@
   // Event Binding & Initialization
   // =========================================================================
   function bindEvents() {
-    // Sidebar toggles
     els.openSidebarBtn.addEventListener('click', toggleSidebar);
     els.collapseSidebarBtn.addEventListener('click', toggleSidebar);
     els.sidebarBackdrop.addEventListener('click', closeMobileSidebar);
 
-    // Auth & Settings Modal
     els.openSettingsBtn.addEventListener('click', () => openAuthModal(true));
     els.closeAuthModalBtn.addEventListener('click', closeAuthModal);
-    els.geminiModelSelect.addEventListener('change', () => {
+    els.geminiModelSelect.addEventListener('change', async () => {
       state.model = els.geminiModelSelect.value;
       localStorage.setItem(STORAGE_KEYS.MODEL, state.model);
       updateModelIndicators();
+      if (state.token) {
+        await apiFetch('/api/auth/preferences', {
+          method: 'PATCH',
+          body: JSON.stringify({ model: state.model }),
+        }).catch(() => {});
+      }
       showToast(`Switched model to ${state.model}`);
     });
     els.loginForm.addEventListener('submit', handlePseudonymousLogin);
     els.guestLoginBtn.addEventListener('click', handleGuestLogin);
     els.signOutBtn.addEventListener('click', handleSignOut);
 
-    // Navigation Tabs
     els.tabButtons.forEach((btn) => {
       btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
 
-    // Helplines Modal
     els.topHelplineBtn.addEventListener('click', () => els.helplineModal.classList.remove('hidden'));
     els.closeHelplineModalBtn.addEventListener('click', () =>
       els.helplineModal.classList.add('hidden')
@@ -1831,7 +1656,6 @@
       switchTab('consultants');
     });
 
-    // New Chat & Intake
     els.newChatBtn.addEventListener('click', startNewChatFlow);
     els.intakeForm.querySelectorAll('.option-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -1855,26 +1679,32 @@
 
     els.quickGenerateNoteBtn.addEventListener('click', handleGenerateNote);
 
-    // Crisis Banner Actions
     els.connectCounselorNowBtn.addEventListener('click', () => {
       switchTab('consultants');
       const firstAvailable =
-        MAHARASHTRA_CONSULTANTS.find((c) => c.availableNow) || MAHARASHTRA_CONSULTANTS[0];
+        state.consultants.find((c) => c.availableNow) || state.consultants[0];
       if (firstAvailable) {
         openVideoModal(firstAvailable);
       }
     });
 
-    els.unlockChatBtn.addEventListener('click', () => {
+    els.unlockChatBtn.addEventListener('click', async () => {
       const chat = getActiveChat();
       if (!chat) return;
-      chat.crisisLocked = false;
-      persistChats();
-      renderActiveChatPanel();
-      showToast('Chat unlocked. Crisis helplines remain accessible in the top bar.');
+      try {
+        const res = await apiFetch(`/api/chats/${encodeURIComponent(chat.id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ crisisLocked: false }),
+        });
+        const idx = state.chats.findIndex((c) => c.id === chat.id);
+        if (idx !== -1) state.chats[idx] = res.chat;
+        renderActiveChatPanel();
+        showToast('Chat unlocked. Crisis helplines remain accessible in the top bar.');
+      } catch (err) {
+        showToast(err.message || 'Could not unlock chat', true);
+      }
     });
 
-    // Chat Composer
     els.chatForm.addEventListener('submit', (e) => {
       e.preventDefault();
       submitChatMessage(els.chatInput.value);
@@ -1892,11 +1722,9 @@
       els.chatInput.style.height = `${Math.min(140, els.chatInput.scrollHeight)}px`;
     });
 
-    // Stress Tracker
     els.stressSlider.addEventListener('input', updateStressSliderPreview);
     els.logStressBtn.addEventListener('click', handleLogStress);
 
-    // Relief Mini-Games
     els.breathingStartBtn.addEventListener('click', startBreathing);
     els.breathingStopBtn.addEventListener('click', stopBreathing);
     els.breathingResetBtn.addEventListener('click', resetBreathing);
@@ -1912,17 +1740,14 @@
       showToast('Bubbles refreshed');
     });
 
-    // Pre-Consultation Note
     els.generateNoteBtn.addEventListener('click', handleGenerateNote);
     els.emptyGenerateNoteBtn.addEventListener('click', handleGenerateNote);
     els.copyNoteBtn.addEventListener('click', handleCopyNote);
     els.downloadNoteBtn.addEventListener('click', handleDownloadNote);
 
-    // Consultants Filters
-    els.cityFilter.addEventListener('change', renderConsultants);
-    els.availabilityFilter.addEventListener('change', renderConsultants);
+    els.cityFilter.addEventListener('change', refreshAndRenderConsultants);
+    els.availabilityFilter.addEventListener('change', refreshAndRenderConsultants);
 
-    // Video Modal Controls
     els.closeVideoModalBtn.addEventListener('click', closeVideoModal);
     els.toggleMicBtn.addEventListener('click', () => {
       state.video.micOn = !state.video.micOn;
@@ -1936,12 +1761,17 @@
     els.toggleJoinCallBtn.addEventListener('click', startVideoCall);
     els.endCallBtn.addEventListener('click', () => {
       stopVideoCallTimer();
+      if (state.video.appointmentId && state.token) {
+        apiFetch(`/api/appointments/${encodeURIComponent(state.video.appointmentId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'ended' }),
+        }).catch(() => {});
+      }
       state.video.connected = false;
       updateVideoModalUI();
       showToast('Video consultation preview ended');
     });
 
-    // Window Resize
     window.addEventListener('resize', () => {
       if (!isMobileViewport()) {
         closeMobileSidebar();
@@ -1952,21 +1782,35 @@
     });
   }
 
-  function init() {
-    loadGlobalSettings();
+  async function init() {
+    const savedModel = localStorage.getItem(STORAGE_KEYS.MODEL);
+    state.model =
+      savedModel === 'gemini-4-hydrogen' || savedModel === 'gemini-3.1-flash-lite'
+        ? savedModel
+        : DEFAULT_MODEL;
+    updateModelIndicators();
     updateStressSliderPreview();
     renderBreathingUI();
-    renderConsultants();
     bindEvents();
 
-    const savedSession = safeJsonParse(localStorage.getItem(STORAGE_KEYS.ACTIVE_SESSION), null);
-    if (savedSession && savedSession.id) {
-      state.session = savedSession;
-      els.authModal.classList.add('hidden');
-      loadUserWorkspaceData();
-    } else {
-      openAuthModal(false);
+    // Load public consultant directory immediately
+    await refreshAndRenderConsultants().catch(() => {});
+
+    const savedToken = localStorage.getItem(STORAGE_KEYS.TOKEN);
+    if (savedToken) {
+      state.token = savedToken;
+      try {
+        const me = await apiFetch('/api/auth/me');
+        state.user = me.user;
+        els.authModal.classList.add('hidden');
+        await hydrateWorkspaceFromBackend();
+        return;
+      } catch {
+        clearClientSession();
+      }
     }
+
+    openAuthModal(false);
   }
 
   document.addEventListener('DOMContentLoaded', init);
